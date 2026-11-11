@@ -22,5 +22,11 @@ export default definePluginSettings({
         type: OptionType.BOOLEAN,
         default: true,
         description: "enable the keybind (ctrl+shift+q) to toggle fake deafen",
+    },
+    // Añadido local: Discord no refleja en tu propia UI el estado forzado por el gateway
+    showOwnIcon: {
+        type: OptionType.BOOLEAN,
+        default: true,
+        description: "show the deafen icon on your own side (visual only, does not affect audio)",
     }
 });

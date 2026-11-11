@@ -7,6 +7,43 @@ const Button = findComponentByCodeLazy(".GREEN,positionKeyStemOverride:");
 let enabled = false;
 let originalSend: any;
 
+// ── Parche visual (local) ──────────────────────────────────────────────
+// Discord pinta TU propio icono de "sordo" leyendo MediaEngineStore.isSelfDeaf(),
+// no el estado que llega del gateway. Por eso los demás te ven sordo y tú no.
+// Solo afecta a lo que se dibuja en tu cliente: no toca el motor de audio.
+let mediaStore: any = null;
+let originalIsSelfDeaf: any = null;
+
+function patchLocalIcon() {
+    if (!Settings.store.showOwnIcon) return;
+    mediaStore ??= findByProps("isDeaf", "isMute") ?? null;
+    if (!mediaStore || originalIsSelfDeaf) return;
+
+    if (typeof mediaStore.isSelfDeaf !== "function") {
+        console.error("[FakeDeafen] isSelfDeaf no existe, no se puede parchear el icono local");
+        return;
+    }
+
+    originalIsSelfDeaf = mediaStore.isSelfDeaf;
+    mediaStore.isSelfDeaf = function (...args: any[]) {
+        if (enabled && Settings.store.fakeDeafen) return true;
+        return originalIsSelfDeaf.apply(this, args);
+    };
+}
+
+function unpatchLocalIcon() {
+    if (mediaStore && originalIsSelfDeaf) {
+        mediaStore.isSelfDeaf = originalIsSelfDeaf;
+    }
+    originalIsSelfDeaf = null;
+}
+
+function refreshLocalUI() {
+    try {
+        mediaStore?.emitChange?.();
+    } catch { /* la UI se refrescará sola en el siguiente evento */ }
+}
+
 function refresh_voice_state(enabled: boolean) {
     const ChannelStore = findByProps("getChannel", "getDMFromUserId");
     const SelectedChannelStore = findByProps("getVoiceChannelId");
@@ -74,7 +111,9 @@ function fd_icon() {
 
 function toggleEnabled() {
     enabled = !enabled;
+    patchLocalIcon();
     refresh_voice_state(enabled);
+    refreshLocalUI();
 }
 
 function handleKeyDown(event: KeyboardEvent) {
@@ -128,9 +167,11 @@ export default definePlugin({
             return originalSend.apply(this, [op, data, ...args]);
         };
         window.addEventListener("keydown", handleKeyDown);
+        patchLocalIcon();
     },
 
     stop() {
+        unpatchLocalIcon();
         const wsModule = findByProps("getSocket");
         if (wsModule) {
             const socket = wsModule.getSocket();
